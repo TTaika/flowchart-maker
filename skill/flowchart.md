@@ -1,17 +1,6 @@
 # Flowchart Generator
 
-Generate a flowchart for the Flowchart Maker app.
-
-## Setup (one-time)
-
-Set the `FLOWCHART_APP_PATH` environment variable to the absolute path where you cloned/downloaded the Flowchart Maker repo. For example:
-
-```
-FLOWCHART_APP_PATH=C:\Users\yourname\dev\flowchart-maker
-FLOWCHART_APP_PATH=/home/yourname/dev/flowchart-maker
-```
-
-If unset, Claude will ask you for the path and remember it for the session.
+Generate a flowchart for the Flowchart Maker app at `C:\Users\eemil\aikansio\flowchart\`.
 
 ## User's request
 
@@ -37,14 +26,57 @@ Generate a valid flowchart JSON file based on the user's description. The file f
 }
 ```
 
-### Rules
+## Generation Process
 
-- **IDs**: All ids across nodes, arrows, and groups must be unique. Set `nextId` to max id + 1.
-- **Shapes**: Use `square` for processes/services, `circle` for data stores/databases, `triangle` for outputs/endpoints.
-- **Colors**: Pick from: `#4a7fd9` (blue), `#e74c3c` (red), `#27ae60` (green), `#f39c12` (yellow), `#8e44ad` (purple), `#1abc9c` (teal), `#e67e22` (orange), `#2c3e50` (dark). Use different colors for different types of components.
-- **Layout**: Space nodes ~200-250px apart. Use a left-to-right or top-to-bottom flow. Typical x range: 100-900, y range: 100-1200. Don't stack nodes on top of each other. Prioritize readability over compactness. **CRITICAL: Arrange nodes so that ZERO arrows cross each other.** Before finalizing, trace every arrow and verify no two arrows intersect. If they do, rearrange nodes until all crossings are eliminated. Place connected nodes close together — a node should be adjacent to its connections, not across the chart. Use a staircase/cascade layout for branching paths rather than putting things in rigid columns far apart.
+**Think before you place.** Follow these phases in order:
+
+### Phase 1: Plan (no JSON yet)
+
+Before placing any nodes, write out:
+1. **List all nodes** — name, type (square/circle/triangle), which group they belong to (if any)
+2. **List all arrows** — from → to, direction, label, detail
+3. **List all groups** — name, which nodes are inside it
+4. **Identify entry and exit points** — where does the data flow start and end?
+5. **Identify the primary flow direction** — top→bottom or left→right?
+
+### Phase 2: Place nodes and arrows
+
+Use a **grid of 60px** as your spacing unit. All node positions should be multiples of 60.
+
+**Placement algorithm:**
+1. Start from one end of the flow (either entry point or final output — whichever feels most natural)
+2. Place that first node at a starting position (e.g. `x: 120, y: 120`)
+3. For each neighbor connected to an already-placed node:
+   - Place it **at least 4 grid lengths (240px)** from the nearest edge of any neighboring node
+   - Keep connected nodes close together
+   - Align it so arrows flow naturally (next node in flow goes right/down)
+4. **No node should be closer than 4 grid lengths (240px)** edge-to-edge from any other node
+5. Trace every arrow path — if two arrows would cross, reposition nodes until they don't
+
+**After all nodes are placed:** double-check arrows don't cross. If they do, swap node positions.
+
+### Phase 3: Place groups (AFTER all nodes are final)
+
+For each group:
+1. Find the bounding box of all nodes that belong to it (min/max x and y of the nodes' edges)
+2. Expand the bounding box by **at least 1 grid length (60px) on every side**
+3. This gives the group a padding buffer from:
+   - The nodes inside it
+   - Other groups nearby
+   - Ungrouped nodes nearby
+4. If two groups would overlap or touch, reposition nodes in Phase 2 to give them room
+
+### Node shapes and colors
+
+- **Shapes**: `square` for processes/services, `circle` for data stores/databases, `triangle` for outputs/endpoints.
+- **Colors**: `#4a7fd9` (blue), `#e74c3c` (red), `#27ae60` (green), `#f39c12` (yellow), `#8e44ad` (purple), `#1abc9c` (teal), `#e67e22` (orange), `#2c3e50` (dark). Use different colors for different types of components.
 - **Default sizes**: Squares `110x110`, circles `100x80`, triangles `130x100`. Adjust wider if the name is long.
-- **Arrows**: `direction` is `"one-way"` or `"two-way"`. `label` is a short header (always visible). `detail` is a longer explanation (shown on hover) — **include file paths, function names, and data shapes** (see detail format below). Only one arrow between any two nodes — use two-way if data flows both directions.
+
+### Arrow rules
+
+- `direction` is `"one-way"` or `"two-way"`. Only one arrow between any two nodes — use two-way if data flows both directions.
+- `label` is a short header (always visible).
+- `detail` is a longer explanation shown on hover — **include file paths, function names, and data shapes**.
 
 ### Arrow detail format
 
@@ -62,7 +94,10 @@ source/file.py → target/file.py | function_a() → function_b() | DataTypeIn �
 - Small projects: ~800 tokens target
 - Large projects: ~1500 tokens target
 - Never exceed ~3000 tokens regardless of project size
-- **Groups**: Use groups to visually contain related nodes. The group rect must be large enough to enclose its nodes (add ~50px padding around them).
+
+### IDs
+
+All ids across nodes, arrows, and groups must be unique. Set `nextId` to max id + 1.
 
 ### Export format
 
@@ -86,21 +121,20 @@ Rules for export:
 - For large projects (15+ nodes), omit function names and data types — file paths only
 - Unnamed nodes are skipped, unnamed arrows have no `(label)` part
 
-### Steps
+## Steps
 
-Use `$FLOWCHART_APP_PATH` (the user's path to the Flowchart Maker app) throughout these steps.
-
-1. Analyze the user's description and identify nodes, connections, and groupings.
-2. Generate the JSON with a sensible, spacious layout.
-3. Generate the export `.txt` from the JSON.
-4. Save BOTH files to the **project folder** (the project the user is asking about):
+1. **Plan** (Phase 1): Write out all nodes, arrows, groups, and the flow direction.
+2. **Place nodes and arrows** (Phase 2): Build outward from one end of the flow. 4+ grid lengths (240px) between all nodes. No arrow crossings.
+3. **Place groups** (Phase 3): Compute bounding box of member nodes, expand by 1+ grid length (60px) on every side.
+4. **Generate the `.txt` export** from the JSON.
+5. Save BOTH files to the **project folder**:
    - `<project>/flowchart.json` — full save file (user opens in Flowchart Maker to view/edit)
    - `<project>/flowchart.txt` — export file (Claude reads to understand architecture)
-5. Also copy the JSON to `$FLOWCHART_APP_PATH/generated/<name>.json` for auto-loading.
-6. Open it in the browser: `start "" "http://localhost:8765?load=generated/<name>.json"` (Windows) or `open "http://localhost:8765?load=generated/<name>.json"` (macOS/Linux).
-7. If the server isn't running, start it first: `cd "$FLOWCHART_APP_PATH" && python3 -m http.server 8765 &` (run in background), then open the URL.
+6. Also copy the JSON to `C:\Users\eemil\aikansio\flowchart\generated\<name>.json` for auto-loading.
+7. Open it in the browser: `start "" "http://localhost:8765?load=generated/<name>.json"`
+8. If the server isn't running, start it first: `cd "C:/Users/eemil/aikansio/flowchart" && py -3.13 -m http.server 8765 &` (run in background), then open the URL.
 
-### Updating existing flowcharts
+## Updating existing flowcharts
 
 If the project already has a `flowchart.json`, read it first. Update it to reflect changes rather than regenerating from scratch — this preserves the user's layout adjustments. After updating:
 - Regenerate the `.txt` export
