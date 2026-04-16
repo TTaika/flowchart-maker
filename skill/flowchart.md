@@ -1,6 +1,17 @@
 # Flowchart Generator
 
-Generate a flowchart for the Flowchart Maker app at `C:\Users\eemil\aikansio\flowchart\`.
+Generate a flowchart for the Flowchart Maker app.
+
+## Setup (one-time)
+
+Set the `FLOWCHART_APP_PATH` environment variable to the absolute path where you cloned/downloaded the Flowchart Maker repo. For example:
+
+```
+FLOWCHART_APP_PATH=C:\Users\yourname\dev\flowchart-maker
+FLOWCHART_APP_PATH=/home/yourname/dev/flowchart-maker
+```
+
+If unset, Claude will ask you for the path and remember it for the session.
 
 ## User's request
 
@@ -77,15 +88,17 @@ Rules for export:
 
 ### Steps
 
+Use `$FLOWCHART_APP_PATH` (the user's path to the Flowchart Maker app) throughout these steps.
+
 1. Analyze the user's description and identify nodes, connections, and groupings.
 2. Generate the JSON with a sensible, spacious layout.
 3. Generate the export `.txt` from the JSON.
-4. Save BOTH files to the **project folder**:
+4. Save BOTH files to the **project folder** (the project the user is asking about):
    - `<project>/flowchart.json` — full save file (user opens in Flowchart Maker to view/edit)
    - `<project>/flowchart.txt` — export file (Claude reads to understand architecture)
-5. Also copy the JSON to `C:\Users\eemil\aikansio\flowchart\generated\<name>.json` for auto-loading.
-6. Open it in the browser: `start "" "http://localhost:8765?load=generated/<name>.json"`
-7. If the server isn't running, start it first: `cd "C:/Users/eemil/aikansio/flowchart" && py -3.13 -m http.server 8765 &` (run in background), then open the URL.
+5. Also copy the JSON to `$FLOWCHART_APP_PATH/generated/<name>.json` for auto-loading.
+6. Open it in the browser: `start "" "http://localhost:8765?load=generated/<name>.json"` (Windows) or `open "http://localhost:8765?load=generated/<name>.json"` (macOS/Linux).
+7. If the server isn't running, start it first: `cd "$FLOWCHART_APP_PATH" && python3 -m http.server 8765 &` (run in background), then open the URL.
 
 ### Updating existing flowcharts
 

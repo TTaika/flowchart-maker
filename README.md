@@ -40,7 +40,7 @@ The `/flowchart` command lets Claude analyze a project and generate an architect
 
 ### Install
 
-Copy `skill/flowchart.md` to your Claude Code commands folder:
+1. Copy `skill/flowchart.md` to your Claude Code commands folder:
 
 ```bash
 # macOS/Linux
@@ -50,7 +50,19 @@ cp skill/flowchart.md ~/.claude/commands/flowchart.md
 copy skill\flowchart.md %USERPROFILE%\.claude\commands\flowchart.md
 ```
 
-Restart Claude Code.
+2. Set the `FLOWCHART_APP_PATH` environment variable to your cloned repo path (so Claude knows where to copy generated JSONs and start the server):
+
+```bash
+# macOS/Linux — add to ~/.bashrc or ~/.zshrc
+export FLOWCHART_APP_PATH=/path/to/flowchart-maker
+
+# Windows — set in System Environment Variables
+setx FLOWCHART_APP_PATH "C:\path\to\flowchart-maker"
+```
+
+If unset, Claude will ask for the path on first use.
+
+3. Restart Claude Code.
 
 ### Usage
 
