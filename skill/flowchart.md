@@ -1,6 +1,6 @@
 # Flowchart Generator
 
-Generate a flowchart for the Flowchart Maker app at `C:\Users\eemil\aikansio\flowchart\`.
+Generate a flowchart for the Flowchart Maker app located at `$FLOWCHART_APP_PATH` (default `~/flowchart-maker`; ask the user if neither exists).
 
 ## User's request
 
@@ -13,15 +13,18 @@ Generate a valid flowchart JSON file based on the user's description. The file f
 ```json
 {
   "nodes": [
-    { "id": 1, "type": "square|circle|triangle", "name": "Node Name", "color": "#hex", "x": 200, "y": 200, "width": 120, "height": 110 }
+    { "id": 1, "type": "square|circle|triangle", "name": "Plain-language name", "color": "#hex", "x": 200, "y": 200, "width": 120, "height": 110 }
   ],
   "arrows": [
-    { "id": 100, "from": 1, "to": 2, "direction": "one-way|two-way", "label": "short header", "detail": "longer explanation of what flows here" }
+    { "id": 100, "from": 1, "to": 2, "direction": "one-way|two-way", "label": "short plain-English verb phrase", "detail": "plain sentence | technical line" }
   ],
   "groups": [
-    { "id": 200, "name": "Group Name", "x": 50, "y": 50, "width": 400, "height": 300, "color": "#hex" }
+    { "id": 200, "name": "Group Name", "x": 50, "y": 50, "width": 400, "height": 300, "color": "#hex" },
+    { "id": 201, "kind": "legend", "name": "Legend", "summary": "One or two plain sentences: what this chart shows and how to read it.",
+      "entries": [ { "shape": "square", "color": "#4a7fd9", "meaning": "A step or service that does work" } ],
+      "x": 0, "y": 0, "width": 420, "height": 300, "color": "#2c3e50" }
   ],
-  "nextId": 201,
+  "nextId": 202,
   "name": "flowchart-name"
 }
 ```
@@ -75,20 +78,46 @@ For each group:
 ### Arrow rules
 
 - `direction` is `"one-way"` or `"two-way"`. Only one arrow between any two nodes — use two-way if data flows both directions.
-- `label` is a short header (always visible).
-- `detail` is a longer explanation shown on hover — **include file paths, function names, and data shapes**.
+- Label and detail are written as described in "Writing for humans" below.
 
-### Arrow detail format
+## Writing for humans (names, labels, details)
 
-Each arrow detail should be a single line with file paths and function signatures, separated by `|`:
-```
-source/file.py → target/file.py | function_a() → function_b() | DataTypeIn → DataTypeOut
-```
+The chart is read by people first and by AI second. Write every visible text so someone who has never seen the code understands it.
+
+**Node names** (always visible):
+- Name nodes by what they DO or ARE in everyday words, 1-4 words: "Login Page", "User Database", "Send Welcome Email" — not `AuthMiddleware`, `userRepo.ts` or `svc_mailer`.
+- No file names, class names, acronyms or jargon in the name. If an acronym is unavoidable, spell it out once in the legend.
+- Processes start with a verb ("Check Password"); stores and outputs are nouns ("Order Database", "Confirmation Email").
+
+**Arrow labels** (always visible):
+- A short verb phrase of 1-4 words saying what happens or what moves: "sends order", "asks for data", "saves result". Never leave a label empty.
+
+**Arrow details** (shown on hover, and kept in the AI export). Two parts on one line, separated by ` | `:
+1. **Plain sentence first**: one sentence a non-programmer understands, saying what happens and why ("The page sends the typed username and password to the server so it can check them.").
+2. **Technical line second**, so AI loses nothing: `source/file.py → target/file.py | function_a() → function_b() | DataTypeIn → DataTypeOut`
+
+Example `detail`:
+`The checkout page sends the shopping cart to the payment service to be charged. | web/checkout.ts → api/pay.py | submitCart() → charge() | Cart → Receipt`
+
+**Node technical info**: names stay plain, so put the code location in the group name or in the arrow technical lines. For any node whose real code name matters, mention it in the technical line of its arrows.
 
 **Scaling rules based on project size:**
-- **Small projects** (<15 nodes): include file paths + function names + data shapes
-- **Large projects** (15+ nodes): include file paths only, skip function signatures unless the connection is non-obvious
-- **Always**: keep each detail to 1 line max
+- **Small projects** (<15 nodes): plain sentence + file paths + function names + data shapes
+- **Large projects** (15+ nodes): plain sentence + file paths only, skip function signatures unless the connection is non-obvious
+- **Always**: one line per detail, plain sentence under ~25 words
+
+**Keep it scannable**: aim for 12 or fewer top-level nodes; merge small internals into one node and use groups for sections. Prefer left→right flow.
+
+## Legend (REQUIRED)
+
+Every chart you draw MUST include exactly one legend: a group with `"kind": "legend"`.
+- `name`: "Legend" (or "How to read this chart").
+- `summary`: 1-2 plain sentences on what the chart shows and where the flow starts and ends.
+- `entries`: one per shape and color you ACTUALLY used (never list unused ones), as `{ "shape": "square|circle|triangle|arrow", "color": "#hex", "meaning": "plain-language meaning" }`. Add an `arrow` entry for one-way vs two-way arrows if both appear.
+- Group colors used for sections may get an entry too (`"shape": "square"`, meaning "Section: ...").
+- Size: width 420 (wider if meanings are long); height = 90 + 40 per entry + 20 per summary line (about 55 chars per line).
+- Placement: below or to the left of the whole chart, at least 60px from every node and group, never overlapping anything. A legend contains no nodes.
+- It is also exported to the `.txt` as a `LEGEND:` section, so the AI gets the same key.
 
 **Token budget for the .txt export:**
 - Small projects: ~800 tokens target
@@ -106,33 +135,38 @@ The export `.txt` is a lightweight version for Claude to quickly understand the 
 ```
 [GroupName]:
   NodeA --> (label) --> NodeB
-    source/file.py → target/file.py | func_a() → func_b() | TypeIn → TypeOut
+    plain sentence | source/file.py → target/file.py | func_a() → func_b() | TypeIn → TypeOut
   NodeC <-> (label) <-> NodeD
     file.py ↔ other.py | read_data() ↔ write_data()
 
 NodeE --> (label) --> NodeF
-  api/routes.py → core/engine.py | handle_request() → process()
+  plain sentence | api/routes.py → core/engine.py | handle_request() → process()
+
+LEGEND - Legend:
+  Summary sentence.
+  square #4a7fd9: A step or service that does work
 ```
 
 Rules for export:
 - Arrows inside a group (both endpoints inside) are indented under the group header
 - Arrows crossing groups or ungrouped are at the top level
-- Detail line: `file_path → file_path | function() → function() | DataType → DataType`
+- Detail line: `plain sentence | file_path → file_path | function() → function() | DataType → DataType`
 - For large projects (15+ nodes), omit function names and data types — file paths only
 - Unnamed nodes are skipped, unnamed arrows have no `(label)` part
+- The legend is appended at the end as a `LEGEND:` section (summary, then one line per entry)
 
 ## Steps
 
-1. **Plan** (Phase 1): Write out all nodes, arrows, groups, and the flow direction.
+1. **Plan** (Phase 1): Write out all nodes (plain-language names), arrows (verb-phrase labels), groups, the legend entries, and the flow direction.
 2. **Place nodes and arrows** (Phase 2): Build outward from one end of the flow. 4+ grid lengths (240px) between all nodes. No arrow crossings.
-3. **Place groups** (Phase 3): Compute bounding box of member nodes, expand by 1+ grid length (60px) on every side.
+3. **Place groups** (Phase 3): Compute bounding box of member nodes, expand by 1+ grid length (60px) on every side. Then add the required legend group clear of everything else.
 4. **Generate the `.txt` export** from the JSON.
 5. Save BOTH files to the **project folder**:
    - `<project>/flowchart.json` — full save file (user opens in Flowchart Maker to view/edit)
    - `<project>/flowchart.txt` — export file (Claude reads to understand architecture)
-6. Also copy the JSON to `C:\Users\eemil\aikansio\flowchart\generated\<name>.json` for auto-loading.
-7. Open it in the browser: `start "" "http://localhost:8765?load=generated/<name>.json"`
-8. If the server isn't running, start it first: `cd "C:/Users/eemil/aikansio/flowchart" && py -3.13 -m http.server 8765 &` (run in background), then open the URL.
+6. Also copy the JSON to `$FLOWCHART_APP_PATH/generated/<name>.json` for auto-loading.
+7. Open it in the browser: `xdg-open "http://localhost:8765?load=generated/<name>.json"`
+8. If the server isn't running, start it first: `cd "$FLOWCHART_APP_PATH" && python3 -m http.server 8765 &` (run in background), then open the URL.
 
 ## Updating existing flowcharts
 

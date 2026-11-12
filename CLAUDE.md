@@ -21,6 +21,7 @@ Web-based flowchart creation tool. No build step — open `index.html` in a brow
 - V: Select — click to select, drag to move, double-click to rename
 - R: Square, C: Circle, T: Triangle — click to place, editor opens immediately
 - G: Group — click-and-drag to draw container area
+- L: Legend — click to place a key panel (auto-filled from shapes/colors in use); double-click it to edit title, summary and entries
 - A: One-way arrow, D: Two-way arrow — click source then target
 - P: Paint — click shapes/groups to apply selected color
 - Left click places, right click returns to select tool
@@ -41,6 +42,7 @@ NodeC <-> (label) <-> NodeD
 - Shapes have no default name — empty if user doesn't type anything
 - Only one arrow allowed between any two shapes (opposite direction merges to two-way)
 - Arrows snap to shape edges with 8px gap, line ends at arrowhead base (no overlap)
+- Legend = group with `kind: "legend"`, `summary`, `entries[{shape,color,meaning}]`; exported as a `LEGEND:` section
 - Groups are visual containers; export lists contained nodes under group header
 - Pan: right-drag (select mode), left-drag on empty canvas, middle-drag, space+left-drag
 - Save/Export prompts for flowchart name

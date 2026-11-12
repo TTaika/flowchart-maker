@@ -468,6 +468,7 @@ body {
     cursor: crosshair;
 }
 
+#canvas-container.tool-legend,
 #canvas-container.tool-group {
     cursor: crosshair;
 }
@@ -585,3 +586,97 @@ body {
 #png-preview-cancel:hover {
     background: #d1d5db;
 }
+
+/* ============ LEGEND EDITOR ============ */
+
+#legend-editor {
+    position: fixed;
+    z-index: 300;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px;
+    max-width: 94vw;
+    max-height: 88vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+    border: 1px solid #d1d5db;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#legend-editor.hidden { display: none; }
+
+#legend-editor h3 { margin: 0 0 4px; font-size: 16px; color: #111827; }
+
+#legend-editor label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#legend-editor input[type=text],
+#legend-editor textarea,
+#legend-editor select {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 5px;
+    outline: none;
+    background: #f9fafb;
+}
+
+#legend-editor input:focus,
+#legend-editor textarea:focus,
+#legend-editor select:focus { border-color: #4a7fd9; background: #fff; }
+
+.legend-row {
+    display: grid;
+    grid-template-columns: 90px 90px 1fr 28px;
+    gap: 6px;
+    align-items: center;
+}
+
+.legend-row .legend-del {
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 5px;
+    cursor: pointer;
+    height: 30px;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.legend-editor-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    margin-top: 6px;
+}
+
+.legend-editor-buttons .right { display: flex; gap: 8px; }
+
+.legend-editor-buttons button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.legend-editor-buttons button:hover { background: #d1d5db; }
+.legend-editor-buttons button.primary { background: #4a7fd9; color: #fff; }
+.legend-editor-buttons button.primary:hover { background: #3b6fc0; }

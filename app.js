@@ -71,6 +71,7 @@ const arrowEditor = document.getElementById('arrow-editor');
 const arrowLabelInput = document.getElementById('arrow-label-input');
 const arrowDetailInput = document.getElementById('arrow-detail-input');
 const arrowTooltip = document.getElementById('arrow-tooltip');
+const legendEditor = document.getElementById('legend-editor');
 
 let tempLine = null; // SVG line shown while drawing arrow
 
@@ -356,14 +357,17 @@ function render() {
         const isSel = isSelected('group', group.id);
         const g = createSVG('g', { 'data-group-id': group.id, class: 'group-container' + (isSel ? ' selected' : '') });
 
+        const isLegend = group.kind === 'legend';
         const rect = createSVG('rect', {
             x: group.x, y: group.y, width: group.width, height: group.height,
-            rx: 12, fill: group.color + '18', stroke: group.color,
-            'stroke-width': 2, 'stroke-dasharray': '8 4', class: 'group-rect',
+            rx: 12, fill: isLegend ? '#ffffff' : group.color + '18', stroke: group.color,
+            'stroke-width': 2, 'stroke-dasharray': isLegend ? 'none' : '8 4', class: 'group-rect',
         });
         g.appendChild(rect);
 
-        if (group.name) {
+        if (isLegend) drawLegend(g, group);
+
+        if (group.name && !isLegend) {
             const labelBg = createSVG('rect', {
                 x: group.x + 10, y: group.y - 10,
                 width: group.name.length * 8 + 16, height: 22,
@@ -929,10 +933,11 @@ function selectTool(tool) {
     ui.arrowSource = null;
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
 
-    container.classList.remove('tool-shape', 'tool-arrow', 'tool-group', 'tool-paint');
+    container.classList.remove('tool-shape', 'tool-arrow', 'tool-group', 'tool-legend', 'tool-paint');
     if (['square', 'circle', 'triangle'].includes(tool)) container.classList.add('tool-shape');
     if (tool.startsWith('arrow-')) container.classList.add('tool-arrow');
     if (tool === 'group') container.classList.add('tool-group');
+    if (tool === 'legend') container.classList.add('tool-legend');
     if (tool === 'paint') container.classList.add('tool-paint');
 
     updateStatus();
@@ -1012,6 +1017,16 @@ function handleMouseDown(e) {
         if (!nodeEl && !arrowEl) {
             e.preventDefault();
             addNode(ui.tool, w.x, w.y);
+        }
+        return;
+    }
+
+    // Legend tool: click to place a legend panel, then edit it
+    if (ui.tool === 'legend') {
+        e.preventDefault();
+        if (!nodeEl && !arrowEl && !groupEl) {
+            addLegend(w.x, w.y);
+            selectTool('select');
         }
         return;
     }
@@ -1131,7 +1146,9 @@ function handleMouseDown(e) {
                 e.preventDefault();
                 lastClick = { time: 0, type: null, id: null };
                 const group = getGroup(gid);
-                if (group) {
+                if (group && group.kind === 'legend') {
+                    openLegendEditor(group);
+                } else if (group) {
                     const screen = worldToScreen(group.x + group.width / 2, group.y + 12);
                     showEditor(screen.x, screen.y, group.name, val => {
                         pushHistory();
@@ -1408,6 +1425,7 @@ function handleKeyDown(e) {
     // Don't handle when editing text
     if (textEditor.classList.contains('hidden') === false) return;
     if (arrowEditor.classList.contains('hidden') === false) return;
+    if (legendEditor.classList.contains('hidden') === false) return;
 
     if (e.key === ' ') {
         e.preventDefault();
@@ -1460,7 +1478,7 @@ function handleKeyDown(e) {
 
     // Keyboard shortcuts for tools
     if (e.key === 'f' && !e.ctrlKey && !e.metaKey) { zoomToFit(); return; }
-    const shortcuts = { v: 'select', r: 'square', c: 'circle', t: 'triangle', g: 'group', p: 'paint', a: 'arrow-oneway', d: 'arrow-twoway' };
+    const shortcuts = { v: 'select', r: 'square', c: 'circle', t: 'triangle', g: 'group', l: 'legend', p: 'paint', a: 'arrow-oneway', d: 'arrow-twoway' };
     if (shortcuts[e.key] && !e.ctrlKey && !e.metaKey) {
         selectTool(shortcuts[e.key]);
     }
@@ -1533,6 +1551,137 @@ function hideArrowEditor() {
     arrowEditorCallback = null;
 }
 
+// ==================== LEGEND EDITOR ====================
+
+const LEGEND_SHAPES = ['square', 'circle', 'triangle', 'arrow'];
+const LEGEND_DEFAULT_MEANING = {
+    square: 'A step or service that does work',
+    circle: 'A place where data is stored',
+    triangle: 'A result or output',
+};
+
+// One entry per shape+color combination actually used in the chart
+function autoLegendEntries() {
+    const seen = new Set();
+    const entries = [];
+    state.nodes.forEach(n => {
+        const key = n.type + n.color;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push({ shape: n.type, color: n.color, meaning: LEGEND_DEFAULT_MEANING[n.type] || '' });
+    });
+    if (state.arrows.some(a => a.direction !== 'two-way')) {
+        entries.push({ shape: 'arrow', color: '#555555', meaning: 'Information or action moves one way' });
+    }
+    if (state.arrows.some(a => a.direction === 'two-way')) {
+        entries.push({ shape: 'arrow', color: '#555555', meaning: 'Information moves both ways' });
+    }
+    return entries;
+}
+
+// Mirrors the row layout used by drawLegend so the panel fits its content
+function fitLegendHeight(group) {
+    const maxChars = Math.max(10, Math.floor((group.width - 32) / 7));
+    let h = 16 + 14 + 12;
+    if (group.summary) h += wrapText(group.summary, maxChars).length * 18 + 8;
+    (group.entries || []).forEach(e => {
+        h += 14 + Math.max(1, wrapText(e.meaning || '', maxChars - 5).length) * 16 + 4;
+    });
+    group.height = h + 16;
+}
+
+function addLegend(x, y) {
+    pushHistory();
+    const group = {
+        id: state.nextId++,
+        kind: 'legend',
+        name: 'Legend',
+        summary: '',
+        entries: autoLegendEntries(),
+        x, y, width: 420, height: 200,
+        color: '#2c3e50',
+    };
+    fitLegendHeight(group);
+    state.groups.push(group);
+    selectOne('group', group.id);
+    render();
+    updateStatus();
+    openLegendEditor(group, true);
+}
+
+function openLegendEditor(group, isNew) {
+    const draft = { name: group.name || '', summary: group.summary || '', entries: deepClone(group.entries || []) };
+    legendEditor.innerHTML = '';
+    legendEditor.classList.remove('hidden');
+
+    const el = (tag, props, parent) => {
+        const node = document.createElement(tag);
+        Object.assign(node, props || {});
+        if (parent) parent.appendChild(node);
+        return node;
+    };
+
+    el('h3', { textContent: isNew ? 'New legend' : 'Edit legend' }, legendEditor);
+    el('label', { textContent: 'Title' }, legendEditor);
+    const titleInput = el('input', { type: 'text', value: draft.name, spellcheck: false }, legendEditor);
+    el('label', { textContent: 'Summary (what this chart shows, in plain words)' }, legendEditor);
+    const summaryInput = el('textarea', { value: draft.summary, rows: 3, spellcheck: false }, legendEditor);
+    el('label', { textContent: 'Entries (shape, color, what it means)' }, legendEditor);
+    const rowsBox = el('div', {}, legendEditor);
+    rowsBox.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+
+    function renderRows() {
+        rowsBox.innerHTML = '';
+        draft.entries.forEach((entry, i) => {
+            const row = el('div', { className: 'legend-row' }, rowsBox);
+            const shapeSel = el('select', {}, row);
+            LEGEND_SHAPES.forEach(s => el('option', { value: s, textContent: s, selected: entry.shape === s }, shapeSel));
+            shapeSel.onchange = () => { entry.shape = shapeSel.value; };
+            const colorSel = el('select', {}, row);
+            const palette = COLORS.some(c => c.hex === entry.color) ? COLORS : COLORS.concat([{ name: 'Custom', hex: entry.color }]);
+            palette.forEach(c => el('option', { value: c.hex, textContent: c.name, selected: entry.color === c.hex }, colorSel));
+            colorSel.style.borderLeft = '8px solid ' + entry.color;
+            colorSel.onchange = () => { entry.color = colorSel.value; colorSel.style.borderLeft = '8px solid ' + entry.color; };
+            const meaning = el('input', { type: 'text', value: entry.meaning || '', placeholder: 'What this means...', spellcheck: false }, row);
+            meaning.oninput = () => { entry.meaning = meaning.value; };
+            const del = el('button', { className: 'legend-del', textContent: '\u00d7', title: 'Remove entry' }, row);
+            del.onclick = () => { draft.entries.splice(i, 1); renderRows(); };
+        });
+    }
+    renderRows();
+
+    const buttons = el('div', { className: 'legend-editor-buttons' }, legendEditor);
+    const left = el('div', { className: 'right' }, buttons);
+    el('button', { textContent: '+ Add entry', onclick: () => {
+        draft.entries.push({ shape: 'square', color: ui.color, meaning: '' });
+        renderRows();
+    } }, left);
+    el('button', { textContent: 'Auto-fill from chart', title: 'Add entries for shapes and colors in use that are missing', onclick: () => {
+        autoLegendEntries().forEach(auto => {
+            if (!draft.entries.some(e => e.shape === auto.shape && e.color === auto.color && (auto.shape !== 'arrow' || e.meaning === auto.meaning))) {
+                draft.entries.push(auto);
+            }
+        });
+        renderRows();
+    } }, left);
+    const right = el('div', { className: 'right' }, buttons);
+    const close = () => { legendEditor.classList.add('hidden'); legendEditor.innerHTML = ''; };
+    el('button', { textContent: 'Cancel', onclick: close }, right);
+    el('button', { className: 'primary', textContent: 'OK', onclick: () => {
+        if (!isNew) pushHistory();
+        group.name = titleInput.value.trim() || 'Legend';
+        group.summary = summaryInput.value.trim();
+        group.entries = draft.entries.filter(e => (e.meaning || '').trim() !== '').map(e => ({ ...e, meaning: e.meaning.trim() }));
+        fitLegendHeight(group);
+        close();
+        render();
+    } }, right);
+
+    legendEditor.onkeydown = e => { if (e.key === 'Escape') close(); };
+    titleInput.focus();
+    titleInput.select();
+}
+
 // ==================== STATUS ====================
 
 function updateStatus() {
@@ -1597,6 +1746,61 @@ function load() {
     fileInput.value = '';
 }
 
+// Legend: a group with kind "legend", an optional plain-language summary and
+// entries [{ shape, color, meaning }]. Drawn as a key panel; holds no nodes.
+function wrapText(text, maxChars) {
+    const lines = [];
+    let cur = '';
+    String(text).split(/\s+/).forEach(word => {
+        if (cur && (cur + ' ' + word).length > maxChars) { lines.push(cur); cur = word; }
+        else cur = cur ? cur + ' ' + word : word;
+    });
+    if (cur) lines.push(cur);
+    return lines;
+}
+
+function drawLegend(g, group) {
+    const pad = 16;
+    let y = group.y + pad + 14;
+    const title = createSVG('text', { x: group.x + pad, y, class: 'legend-title', 'font-weight': 'bold', 'font-size': 16, fill: '#222' });
+    title.textContent = group.name || 'Legend';
+    g.appendChild(title);
+    y += 12;
+
+    const maxChars = Math.max(10, Math.floor((group.width - pad * 2) / 7));
+    if (group.summary) {
+        wrapText(group.summary, maxChars).forEach(line => {
+            y += 18;
+            const t = createSVG('text', { x: group.x + pad, y, 'font-size': 13, fill: '#444' });
+            t.textContent = line;
+            g.appendChild(t);
+        });
+        y += 8;
+    }
+
+    (group.entries || []).forEach(entry => {
+        const cx = group.x + pad + 12, cy = y + 22;
+        const fill = entry.color || '#888';
+        if (entry.shape === 'circle') {
+            g.appendChild(createSVG('ellipse', { cx, cy, rx: 12, ry: 9, fill }));
+        } else if (entry.shape === 'triangle') {
+            g.appendChild(createSVG('polygon', { points: `${cx},${cy - 10} ${cx + 12},${cy + 9} ${cx - 12},${cy + 9}`, fill }));
+        } else if (entry.shape === 'arrow') {
+            g.appendChild(createSVG('line', { x1: cx - 12, y1: cy, x2: cx + 10, y2: cy, stroke: fill, 'stroke-width': 2 }));
+            g.appendChild(createSVG('polygon', { points: `${cx + 13},${cy} ${cx + 6},${cy - 5} ${cx + 6},${cy + 5}`, fill }));
+        } else {
+            g.appendChild(createSVG('rect', { x: cx - 11, y: cy - 10, width: 22, height: 20, rx: 3, fill }));
+        }
+        const lines = wrapText(entry.meaning || '', maxChars - 5);
+        lines.forEach((line, i) => {
+            const t = createSVG('text', { x: group.x + pad + 36, y: cy + 5 + i * 16, 'font-size': 13, fill: '#222' });
+            t.textContent = line;
+            g.appendChild(t);
+        });
+        y += 14 + Math.max(1, lines.length) * 16 + 4;
+    });
+}
+
 function nodeInGroup(node, group) {
     return node.x >= group.x && node.x <= group.x + group.width &&
            node.y >= group.y && node.y <= group.y + group.height;
@@ -1630,7 +1834,7 @@ function exportText() {
     const groupedArrowIds = new Set();
 
     state.groups.forEach(group => {
-        if (!group.name) return;
+        if (!group.name || group.kind === 'legend') return;
         const nodesInGroup = state.nodes.filter(n => nodeInGroup(n, group));
         const nodeIds = new Set(nodesInGroup.map(n => n.id));
         nodesInGroup.forEach(n => groupedNodeIds.add(n.id));
@@ -1671,6 +1875,16 @@ function exportText() {
         if (!connectedIds.has(n.id) && !groupedNodeIds.has(n.id) && n.name) {
             lines.push(`[${n.name}]`);
         }
+    });
+
+    // Legend(s): plain-language summary and what each shape/color means
+    state.groups.filter(g => g.kind === 'legend').forEach(legend => {
+        lines.push('');
+        lines.push(`LEGEND${legend.name ? ' - ' + legend.name : ''}:`);
+        if (legend.summary) lines.push(`  ${legend.summary}`);
+        (legend.entries || []).forEach(e => {
+            lines.push(`  ${e.shape || 'square'} ${e.color || ''}: ${e.meaning || ''}`.replace(/ {2,}/g, ' ').replace(/^ /, '  '));
+        });
     });
 
     const text = lines.join('\n');

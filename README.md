@@ -23,6 +23,7 @@ Open `index.html` in any browser. No build step, no server, no dependencies.
 - **Arrows**: One-way and two-way with curved bezier paths, obstacle avoidance
 - **Labels**: Header (always visible) + detail text (shown on hover)
 - **Groups**: Visual containers for organizing related components
+- **Legend**: Key panel (L tool) listing what each shape/color means, with a plain-language summary; auto-filled from the chart, editable by double-click, included in the .txt export
 - **Colors**: 8-color palette with paint tool
 - **Resize**: Drag corner handles on shapes and groups
 - **Multi-select**: Shift+click or Ctrl+drag box select
